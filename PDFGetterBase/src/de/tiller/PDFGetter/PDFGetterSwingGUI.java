@@ -1,8 +1,10 @@
 package de.tiller.PDFGetter;
 
 import java.awt.GridBagLayout;
+
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
+
 import java.awt.GridBagConstraints;
 
 import javax.swing.JFileChooser;
@@ -15,6 +17,7 @@ import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
 
 import java.awt.Insets;
+
 import javax.swing.JTextField;
 import javax.swing.JTextArea;
 import javax.swing.JButton;
@@ -37,7 +40,6 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.prefs.*;
@@ -46,6 +48,8 @@ import java.util.regex.Pattern;
 import javax.swing.JCheckBox;
 
 import de.tiller.PDFGetter.Page.Base64Encoder;
+import de.tiller.PDFGetter.Page.MagicResults;
+import de.tiller.PDFGetter.Page.Update;
 
 import com.sun.org.apache.xml.internal.security.utils.Base64;
 
@@ -120,21 +124,32 @@ public class PDFGetterSwingGUI extends JPanel {
 				return;
 			}
 
-			Page.updateAllFiles = jCheckBoxDownloadAll.isSelected();
+			Page.updateAllFiles = getJCheckBoxDownloadAll().isSelected();
+			Page.updateChangedFiles = getChckbxUpdatefiles().isSelected();
 
-			Throwable[] thrown = Page.execute(
-					pages.toArray(new Page[pages.size()]), true).thrown;
-
+			final MagicResults result = Page.execute(
+					pages.toArray(new Page[pages.size()]), true);
+			
 			String message = "Downloaded " + Page.downloadedFiles.get()
 					+ " files (" + Page.downloadedBytes.get() + " Bytes)\n"
 					+ "in " + (System.currentTimeMillis() - time)
-					+ " milliseconds";
+					+ " milliseconds\n";
+			
+			for (Update update : result.updates) {
+				message += "\n" + update.type + ": " + update.file;
+			}
+			
+			message += "\n";
 
+			Throwable[] thrown = result.thrown;
+			
 			if (thrown.length > 0)
 				message += "\n" + thrown.length + " Error(s) occured:\n";
 
 			for (Throwable t : thrown)
 				message += "\n\t" + t.getMessage();
+			
+			System.out.println(message);
 
 			JOptionPane.showMessageDialog(me(), message);
 		}
@@ -165,6 +180,7 @@ public class PDFGetterSwingGUI extends JPanel {
 	private JButton jButtonDownload = null;
 	private JCheckBox jCheckBoxDownloadAll = null;
 	private JTextField jTextFieldPattern = null;
+	private JCheckBox chckbxUpdatefiles;
 
 	/**
 	 * This is the default constructor
@@ -202,7 +218,8 @@ public class PDFGetterSwingGUI extends JPanel {
 					new File(settingsLocation))).readObject();
 
 			settings = file.settings;
-			jCheckBoxDownloadAll.setSelected(file.update);
+			getJCheckBoxDownloadAll().setSelected(file.update);
+			getChckbxUpdatefiles().setSelected(file.updateChanged);
 		} catch (FileNotFoundException e) {
 			// eat
 		} catch (IOException e) {
@@ -219,21 +236,11 @@ public class PDFGetterSwingGUI extends JPanel {
 	 * @return void
 	 */
 	private void initialize() {
-		GridBagConstraints gridBagConstraints12 = new GridBagConstraints();
-		gridBagConstraints12.gridx = 1;
-		gridBagConstraints12.anchor = GridBagConstraints.WEST;
-		gridBagConstraints12.gridy = 2;
-		GridBagConstraints gridBagConstraints111 = new GridBagConstraints();
-		gridBagConstraints111.gridx = 0;
-		gridBagConstraints111.anchor = GridBagConstraints.EAST;
-		gridBagConstraints111.gridy = 2;
-
-		JLabel jLabelUpdateAll = new JLabel("Update all Files");
 		GridBagConstraints gridBagConstraints81 = new GridBagConstraints();
 		gridBagConstraints81.gridx = 2;
 		gridBagConstraints81.gridwidth = 1;
-		gridBagConstraints81.insets = new Insets(0, 5, 5, 5);
-		gridBagConstraints81.gridy = 2;
+		gridBagConstraints81.insets = new Insets(0, 5, 0, 5);
+		gridBagConstraints81.gridy = 3;
 		GridBagConstraints gridBagConstraints71 = new GridBagConstraints();
 		gridBagConstraints71.gridx = 3;
 		gridBagConstraints71.insets = new Insets(5, 5, 5, 5);
@@ -244,6 +251,7 @@ public class PDFGetterSwingGUI extends JPanel {
 		gridBagConstraints61.insets = new Insets(5, 5, 5, 5);
 		gridBagConstraints61.gridy = 1;
 		GridBagConstraints gridBagConstraints51 = new GridBagConstraints();
+		gridBagConstraints51.insets = new Insets(0, 0, 5, 5);
 		gridBagConstraints51.gridx = 2;
 		gridBagConstraints51.fill = GridBagConstraints.HORIZONTAL;
 		gridBagConstraints51.anchor = GridBagConstraints.WEST;
@@ -253,6 +261,7 @@ public class PDFGetterSwingGUI extends JPanel {
 		gridBagConstraints51.gridy = 1;
 		jLabelSettingsLocationContent = new JLabel("");
 		GridBagConstraints gridBagConstraints41 = new GridBagConstraints();
+		gridBagConstraints41.gridx = 0;
 		gridBagConstraints41.gridy = 1;
 		gridBagConstraints41.ipadx = 0;
 		gridBagConstraints41.ipady = 0;
@@ -260,6 +269,7 @@ public class PDFGetterSwingGUI extends JPanel {
 		gridBagConstraints41.anchor = GridBagConstraints.WEST;
 		jLabelSettingsLocationLabel = new JLabel("Settings Location");
 		GridBagConstraints gridBagConstraints = new GridBagConstraints();
+		gridBagConstraints.insets = new Insets(0, 0, 5, 0);
 		gridBagConstraints.fill = GridBagConstraints.BOTH;
 		gridBagConstraints.gridy = 0;
 		gridBagConstraints.weightx = 1.0;
@@ -273,9 +283,21 @@ public class PDFGetterSwingGUI extends JPanel {
 		this.add(jLabelSettingsLocationContent, gridBagConstraints51);
 		this.add(getJButtonChooseSettingsFile(), gridBagConstraints61);
 		this.add(getJButtonSaveSettings(), gridBagConstraints71);
-		this.add(getJButtonDownload(), gridBagConstraints81);
-		this.add(jLabelUpdateAll, gridBagConstraints111);
+		GridBagConstraints gbc_chckbxUpdatefiles = new GridBagConstraints();
+		gbc_chckbxUpdatefiles.anchor = GridBagConstraints.WEST;
+		gbc_chckbxUpdatefiles.gridwidth = 2;
+		gbc_chckbxUpdatefiles.insets = new Insets(0, 0, 5, 5);
+		gbc_chckbxUpdatefiles.gridx = 0;
+		gbc_chckbxUpdatefiles.gridy = 2;
+		add(getChckbxUpdatefiles(), gbc_chckbxUpdatefiles);
+		GridBagConstraints gridBagConstraints12 = new GridBagConstraints();
+		gridBagConstraints12.gridwidth = 2;
+		gridBagConstraints12.insets = new Insets(0, 0, 0, 5);
+		gridBagConstraints12.gridx = 0;
+		gridBagConstraints12.anchor = GridBagConstraints.WEST;
+		gridBagConstraints12.gridy = 3;
 		this.add(getJCheckBoxDownloadAll(), gridBagConstraints12);
+		this.add(getJButtonDownload(), gridBagConstraints81);
 	}
 
 	/**
@@ -694,7 +716,8 @@ public class PDFGetterSwingGUI extends JPanel {
 										new FileOutputStream(new File(
 												settingsLocation)));
 								out.writeObject(new SettingsFile(settings,
-										jCheckBoxDownloadAll.isSelected()));
+										getJCheckBoxDownloadAll().isSelected(),
+										getChckbxUpdatefiles().isSelected()));
 							} catch (Exception e1) {
 								// eat
 							}
@@ -772,6 +795,7 @@ public class PDFGetterSwingGUI extends JPanel {
 	private JCheckBox getJCheckBoxDownloadAll() {
 		if (jCheckBoxDownloadAll == null) {
 			jCheckBoxDownloadAll = new JCheckBox();
+			jCheckBoxDownloadAll.setText("Update all files");
 			jCheckBoxDownloadAll
 					.setToolTipText("If checked, files will be downloaded and overwritten even if they already exist. Note that I will also check subfolders for existing files.");
 		}
@@ -807,6 +831,11 @@ public class PDFGetterSwingGUI extends JPanel {
 		}
 		return jTextFieldPattern;
 	}
-
+	private JCheckBox getChckbxUpdatefiles() {
+		if (chckbxUpdatefiles == null) {
+			chckbxUpdatefiles = new JCheckBox("Update changed Files");
+		}
+		return chckbxUpdatefiles;
+	}
 } // @jve:decl-index=0:visual-constraint="10,10"
 

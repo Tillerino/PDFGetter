@@ -12,6 +12,7 @@ import java.io.StringReader;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -68,7 +69,7 @@ public class Page implements Serializable {
 	}
 
 	public enum UpdateType {
-		isNew, wasModified
+		NEW, MODIFIED
 	}
 
 	public static final AtomicLong done = new AtomicLong();
@@ -95,6 +96,7 @@ public class Page implements Serializable {
 	}
 
 	public static boolean updateAllFiles = false;
+	public static boolean updateChangedFiles = false;
 
 	/**
 	 * Downloads a remote, password protected file. It will either be returned
@@ -117,23 +119,29 @@ public class Page implements Serializable {
 	 */
 	public static String download(URL URL, String userpwd, File localTarget)
 			throws IOException, AutorizationException {
-		final InputStream stream = tryPasswords(URL, userpwd).getInputStream();
+		HttpURLConnection connection = tryPasswords(URL, userpwd);
+		try {
+			final InputStream stream = connection.getInputStream();
 
-		final OutputStream out;
-		if (localTarget != null)
-			out = new FileOutputStream(localTarget);
-		else
-			out = new ByteArrayOutputStream(64 * 1024);
+			final OutputStream out;
+			if (localTarget != null)
+				out = new FileOutputStream(localTarget);
+			else
+				out = new ByteArrayOutputStream(128 * 1024);
 
-		final int streamed = stream(stream, out, 64 * 1024);
+			final int streamed = stream(stream, out, 128 * 1024);
 
-		downloadedBytes.addAndGet(streamed);
+			downloadedBytes.addAndGet(streamed);
 
-		if (localTarget != null) {
-			out.close();
-			return null;
-		} else
-			return ((ByteArrayOutputStream) out).toString();
+			if (localTarget != null) {
+				out.close();
+				return null;
+			} else {
+				return new String(((ByteArrayOutputStream) out).toByteArray(), Charset.forName("UTF-8"));
+			}
+		} finally {
+			connection.disconnect();
+		}
 
 	}
 
@@ -401,11 +409,15 @@ public class Page implements Serializable {
 			if (targetFile == null) {
 				targetFile = new File(targetLocation, new File(
 						fileURL.getPath()).getName());
-				update.type = UpdateType.isNew;
+				update.type = UpdateType.NEW;
 			} else if (!updateAllFiles) {
 				// so the file exists and we don't want to update all files
 				// let's check, if the file sizes differ!
 
+				if (!updateChangedFiles) {
+					continue;
+				}
+				
 				try {
 					int length = tryPasswords(fileURL, userpwd)
 							.getContentLength();
@@ -413,7 +425,7 @@ public class Page implements Serializable {
 					if (length == 0 || length == targetFile.length())
 						continue;
 
-					update.type = UpdateType.wasModified;
+					update.type = UpdateType.MODIFIED;
 				} catch (Exception e) {
 					thrown.add(e);
 					continue;
