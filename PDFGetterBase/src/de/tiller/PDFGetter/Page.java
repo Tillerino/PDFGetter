@@ -24,6 +24,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.lang3.StringEscapeUtils;
+
 import com.sun.org.apache.xml.internal.security.utils.Base64;
 
 /**
@@ -377,6 +379,7 @@ public class Page implements Serializable {
 		while (m.find()) {
 
 			String abstractURL = m.group(1);
+			abstractURL = StringEscapeUtils.unescapeHtml4(abstractURL);
 			// System.out.println(abstractURL);
 			if (pattern != null && !pattern.matcher(abstractURL).matches())
 				continue;
